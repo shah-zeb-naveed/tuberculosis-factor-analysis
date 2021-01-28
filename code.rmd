@@ -1,0 +1,329 @@
+---
+title: "Assignment 2"
+author: Shahzeb Naveed (20789222) | Zaryab Javaid (20852202)) | Muhammad Mohsin Tahir (20812155))
+output: word_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(tidyverse))
+suppressMessages(library(ggm))
+
+```
+## **Introduction**
+
+Tuberculosis (TB) remains an important global health issue. Awareness about the disease, its diagnosis, and treatment among public will help in controlling this killer disease. This study is related to finding a contributing factor which is highly co-related with TB. 
+
+## **Data**:
+After exploration of datasets provided by WHO, we wanted to know more about the contribution of various factors that can potentially cause this fatal disease. The following variables of interest were plotted from the  'Dissegregated Estimates' dataset that inititally had **7310 obervations** and **13 variables**. 
+
+| Variable        | Description  | Type  | Min | Median | Max | 
+| ------------- |:-------------:| -----:|-----:|-----:|-----:|
+| best   | TB Incidents (Best Estimate) | Integer | 0 | 7832 | 2690000 |
+| risk_factor     |  Risk factor for TB     |  char | - | - | - |
+
+```{r}
+
+tb <- read.csv("C:\\Users\\shah_\\Downloads\\TB_burden_age_sex_2020-02-29.csv", stringsAsFactors = FALSE)
+```
+
+
+``` {r}
+library (dplyr)
+df <- dplyr::select(tb,-(iso2:measure),-unit,-year)
+df$age_group[df$age_group=='14-May'] <- '5-14'
+
+df$risk_factor[df$risk_factor=="alc"] <- "Alcohol"
+df$risk_factor[df$risk_factor=="smk"] <- "Smoking"
+df$risk_factor[df$risk_factor=="dia"] <- "Diabetes"
+df$risk_factor[df$risk_factor=="und"] <- "Undernourishment"
+df$risk_factor[df$risk_factor=="hiv"] <- "HIV"
+
+df <- df %>% mutate(country=as.factor(country),risk_factor=as.factor(risk_factor),sex=as.factor(sex),age_group=as.factor(age_group)) %>% rename('incBest'=best,'incLow'=lo,'incHi'=hi)
+
+
+
+```
+
+
+```{r}
+
+x1 <- df %>% filter(risk_factor != "all") %>% group_by(risk_factor) %>% summarise(mysum =sum(incBest)) 
+
+ggplot(data = x1, aes(x=risk_factor, y = mysum)) + geom_bar(stat="identity", fill = "seagreen") + xlab("Risk Factors") + ylab("Total Incidents") + ggtitle("       Tuberculosis Incidence by Risk Various Factors (2000-2018)")
+
+```
+
+
+As clearly seen, a person can develop TB due to many possible risk factors with undernourishment being the most common and diabetes being the least common causes. Based on data availablity, we decided to expore the correlation between HIV infections and TB cases. For this purpose, we found that the dataset 'TB_notification' contained total number of independent HIV cases reported from 1980 till 2018 in 218 different countries. For total number of TB cases reported in different years, we used the "TB_burden_countries" dataset and left-joined both the datasets. We then, **left-joined** the two datasets using (country, year) as the primary key.
+
+**Summary of variables of interest**:
+
+The final dataset had **5 variables** and **862 observations**. 
+
+| Variable        | Description  | Type  | Min | Median | Max | 
+| ------------- |:-------------:| -----:|-----:|-----:|-----:|
+| e_inc_num    | TB Incidents | Integer | 1 | 5400 | 3200000 |
+| e_pop_num      | Country Population      |  Integer | 1.012e+04 | 6.950e+06  | 1.399e+09 |
+| hiv_reg | HIV Incidents      |   Integer | 1 | 1984 | 4277683 |
+| e_inc_tbhiv_num | HIV-positive TB Cases      |   Integer | 0 | 210 | 332000 |
+| e_mort_num | Deaths by TB      |   Integer | 0 | 300 | 735000 |
+| year    | Year | char | - | - | - |
+| country    | Country | char | - | - | - |
+
+#### **Data Cleaning** :
+Out of the three selected datasets, only "TB_notification" contained around **3142 missing values** in the column of hiv_reg which were dropped from analysis. As far as **outlier detection** is concerned, the very high values(TB cases) might appear to be "abnormally high" but we are including those in our analysis as they might correspond to countries like China/India having high incidents in proportion to their large sizes. Apart from this the data we used was consistent, correct and there were no structural errors.
+
+## **Planning**
+
+Before building any hypothesis, its really important to check whether the hypothesis makes any practical sense. After doing extensive research, we came to know that TB is an opportunistic infection (OI)[1]. OIs are infections that occur more often or are more severe in people with weakened immune systems than in people with healthy immune systems. HIV weakens the immune system, increasing the risk of TB in people with HIV. So, it definitely makes sense to investigate this correlation in detail.
+
+#### **Hypothesis :** 
+
+**Null Hypothesis:** The correlation coefficent between number of TB and number  HIV cases reported is 0.
+
+**Alternative Hypothesis:** The correlation coefficent between number of TB and number  HIV cases reported is different from 0.
+
+#### **Data Manipulation :** 
+
+The three variables which we selected are HIV cases, TB cases and Total Population for each country (as **Control Variable**) were present in two different datasets. Before merging, we filtered data from **2000 to 2018** from the Notificants dataset as we only had data for TB for that duration in the TB_Burden_Countries dataset.
+
+For simplying our analysis, we categorized countries as Large or Small with countries with populations greater than 10 times the mean population size being labelled as Large.
+
+```{r}
+
+hiv <- read.csv("C:\\Users\\shah_\\Downloads\\TB_burden_countries_2020-02-29.csv",stringsAsFactors = FALSE)
+
+myhiv <- hiv %>% dplyr::select (country,year,e_pop_num,e_inc_100k,e_inc_num,e_tbhiv_prct,e_inc_tbhiv_100k,e_inc_tbhiv_num ) %>% mutate(year=as.character(year))
+
+```
+
+
+```{r}
+noti <- read.csv("C:\\Users\\shah_\\Downloads\\TB_notifications_2020-02-29.csv",stringsAsFactors = FALSE)
+
+```
+
+
+```{r}
+
+mynot <- noti %>% dplyr::select(country,year,hiv_reg,unconf_rrmdr_tx) %>% mutate(year=as.character(year)) %>% filter(year>=2000)
+
+mynot.nonas = na.omit(mynot)
+
+
+
+```
+
+
+
+
+
+```{r,results="hide",echo=FALSE,message=FALSE}
+
+mydata1 <- myhiv %>% left_join(mynot) 
+
+```
+
+#### **Assumptions **
+
+Testing Assumptions for Pearson Correlation:
+
+1. Normality
+2. Homeoscedacity
+3. Linearity
+
+From the histograms below, it is evident that all three variables are **highly right-skewed**. However, we confirm this by Shapiro-Wilk Normality test giving beneath the hisograms:
+
+
+```{r}
+
+
+
+mydata1 <- mydata1 %>% dplyr::select(country,year,e_pop_num,e_inc_num,hiv_reg) %>% drop_na(hiv_reg) %>% filter(hiv_reg!=0,e_inc_num!=0,e_pop_num!=0)
+
+mydata1 <- mydata1 %>%dplyr:: select(country,year,e_pop_num,e_inc_num,hiv_reg) %>% drop_na(hiv_reg) %>% filter(hiv_reg!=0,e_inc_num!=0,e_pop_num!=0)
+
+
+hist(mydata1$e_pop_num/1000000, 
+     main="Country Population Distribution", 
+     xlab="Population (millions)",
+     col="mediumpurple4", 
+     border = "mediumpurple4",
+     las=1, 
+     breaks=5)
+
+hist(mydata1$e_inc_num/1000000, 
+     main="TB Cases Distribution", 
+     xlab="TB Cases (millions)",
+     col="mediumpurple4", 
+     border = "mediumpurple4",
+     las=1, 
+     breaks=5)
+
+hist(mydata1$hiv_reg/1000000, 
+     main="HIV Cases Distribution", 
+     xlab="HIV Cases (millions)",
+     col="mediumpurple4", 
+     border = "mediumpurple4",
+     las=1, 
+     breaks=5)
+
+
+
+
+```
+
+
+**Shapiro-Wilk Normality Test**
+
+| Variable        | Test Statistic W  | p-Value  | Result | 
+| ------------- |:-------------:| -----:|-----:|
+| TB Incidents    | 0.22547 | 2.2e-16 | Non-normal | 
+| HIV Incidents      | 0.23568      |  2.2e-16 | Non-normal |
+| Population | 0.26553      |   2.2e-16 | Non-normal |
+
+As far as homeoscedacity is concerned, we can observe from the scatter plots plotted below that **fans out thus violaiting the assumption for homoscedacity**. It is evident from scatter plots that data is **not linear** as well.
+
+Therefore, we cannot use Pearson corrleation method, we will have to use non-parameteric method **Kendall Rank Correlation**.
+
+## **Analysis**
+#### **Correlation Coefficeint Calcualtions and Hypothesis Testing **
+
+Now, let's plot the two variables; the HIV-positive TB and Total Tuberculoses incidents. As seen visually, there exists a clear positive correlation i.e as number of infections increase, the TB incidents also increase. (For more insights, see "Conclusion and Key Insights" section)
+
+```{r,results="hide",echo=FALSE,message=FALSE}
+
+library(car)
+
+fligner.test(e_inc_num ~ e_pop_num, data = mydata1)
+
+shapiro.test(mydata1$e_pop_num)
+shapiro.test(mydata1$e_inc_num)
+shapiro.test(mydata1$hiv_reg)
+
+```
+
+```{r,echo=FALSE,message=FALSE}
+
+mydata1$country[mydata1$e_pop_num<=10*32109693]="Small"
+mydata1$country[mydata1$e_pop_num>10*32109693]="Large"
+
+ggplot(data=mydata1,aes(x = hiv_reg/1000000, y = e_inc_num/1000000))+ geom_point(aes(color = country))+geom_smooth(method=lm,level=0.95)+xlab("HIV Incidents (millions)") + ylab("Tuberculosis Incidents (millions)")+ggtitle("HIV vs Tuberculosis Incidents")
+
+
+```
+
+Kendall's Correlation Coefficient:
+
+```{r,echo=FALSE,message=FALSE}
+
+
+mydata1 %>% dplyr::select(e_inc_num,hiv_reg)  %>%  cor(use="complete.obs", method = "kendall")
+
+```
+The correlation coefficient comes out to be **0.5201**. To test the statistical significance (and our null hypothesis), we apply cor.test() function:
+``` {r,echo=FALSE,message=FALSE}
+
+cor.test(mydata1$e_inc_num,mydata1$hiv_reg,method = "kendall")
+
+```
+
+With a p-value of 2.2e-16, we have a strong evidence to reject the null hypothesis at 0.05 significance level and conclude that the correlation between HIV cases and TB cases exists.
+
+#### **Partial-Correlation Coefficient Calculations:**
+
+We will find partial correlation in order to  measure the true strength of the relationship by **controlling for the effect of Population sizes**. 
+
+The plot below shows that correlation exists between population and number of TB cases reported and thus, the Population must be "controlled" using partial-correlation. We can also confirm it by performing Kendell Rank Correation Coefficient between population and TB cases.
+
+```{r}
+
+ggplot(data=mydata1,aes(x = e_pop_num/1000000, y = e_inc_num/1000000))+ geom_point(aes(color=country))+geom_smooth(method=lm,level=0.95)+xlab("Population (millions)") + ylab("Tuberculosis Incidents (millions)")+ggtitle("Countries' Population vs Tuberculosis Incidents")
+
+```
+
+Kendall's Correlation Coefficient:
+
+```{r}
+mydata1 %>% dplyr::select(e_inc_num,e_pop_num)  %>%  cor(use="complete.obs", method = "kendall")
+```
+
+The correlation coefficient of **0.677** shows that there is a high positive correlation between population and number of TB cases reported. So it means we will have to nullify the effect of population on TB cases when testing our hypothesis and will have to treat it as a **control variable**.
+
+Kendall's Partial Correlation Coefficient:
+
+We got a **0.301** value for Kendall's partial correlation coefficient.It shows a moderate positive correlation between number of TB cases and HIV cases while controlling the population. We further tested with pcor.test() and got the following results.
+
+```{r,results="hide",echo=FALSE,message=FALSE}
+
+library (dplyr)
+mypcor <- mydata1 %>% dplyr:: select(e_inc_num,hiv_reg,e_pop_num)
+#pcorrelation <- ppcor::pcor(c("e_inc_num", "hiv_reg", "e_pop_num"), method = "kendall")
+pcorrelation <- ppcor::pcor(mypcor, method = "kendall")
+pcorrelation
+
+```
+
+Partial Correlation Test
+
+``` {r}
+
+ppcor::pcor.test(mypcor$e_inc_num,mypcor$hiv_reg,mypcor$e_pop_num,method= "kendall")
+
+```
+
+With a p-value of 6.000311e-40, we have a strong evidence to reject the null hypothesis at 0.05 significance level and conclude that the a direct corelation between HIV cases and TB cases exists and it can be considered as moderate positive association.
+
+
+### Follow-up:
+
+Digging further into it, we analyzed contribution to "deaths by TB" by HIV as a factor. To determine the true correlation between TB Mortality and HIV-incuded TB mortality, we "excluded" the effect of other possible factors of TB (such as alcohol, diabetes etc) through **partial correlation**. In partial correlation test, we get correlation coeffcient of **0.402** as shown below. (For more insights, see "Conclusion and Key Insights" section)
+
+```{r warning=FALSE}
+
+
+hiv2 <- hiv
+hiv2$country[hiv2$e_pop_num<=10*32109693]="Small"
+hiv2$country[hiv2$e_pop_num>10*32109693]="Large"
+
+
+#hiv %>% dplyr::select(e_inc_tbhiv_num,e_mort_num) %>% cor(use="complete.obs", method = "kendall")
+mypcor <- hiv %>%  dplyr::select(e_inc_tbhiv_num,e_mort_num,e_mort_exc_tbhiv_num) %>% drop_na(e_inc_tbhiv_num,e_mort_num,e_mort_exc_tbhiv_num)
+#pcorrelation <- ppcor::pcor(c("e_inc_tbhiv_num","e_mort_num","e_mort_exc_tbhiv_num"), var(mypcor))
+#pcorrelation
+#ppcor::pcor.test(pcorrelation, 1, nrow(mypcor))
+
+#mypcor <- mydata1 %>% dplyr:: select(e_inc_num,hiv_reg,e_pop_num)
+#pcorrelation <- ppcor::pcor(c("e_inc_num", "hiv_reg", "e_pop_num"), method = "kendall")
+#pcorrelation <- ppcor::pcor(mypcor, method = "kendall")
+
+pcorrelation <-ppcor::pcor.test(mypcor$e_inc_tbhiv_num,mypcor$e_mort_num,mypcor$e_mort_exc_tbhiv_num,method= "kendall")
+
+pcorrelation
+
+ggplot(data=hiv2,aes(x = e_inc_tbhiv_num/1000, y = e_mort_num/1000))+ geom_point(aes(color=country))+geom_smooth(method=lm,level=0.95)+xlab("People infected with HIV-positive TB (millions)") + ylab("Deaths from TB (overall) (millions)")+ggtitle("TB Mortality vs HIV-positive TB cases")
+
+
+```
+
+### Conclusion and Key Insights:
+
+1. Undernourishment is the most common and diabetes is the least common cause of Tuberculosis.
+2. We conclude that a moderate positive correlation exists between the number of TB and HIV cases reported, however we cannot conclude anything about the causality here.
+3. In large countries, the increase in TB Mortality with an increase in HIV-positive is more rapid. 
+4. In large countries, even with large number of TB incidents, the contribution of HIV to TB is lower than that in small countries. This implies that in these countries, other factors such as alcohol consumption or diabetes might be the more contributing causes of TB.
+5. From our analysis, we also conclude that if any future studies about Tuberculosis and HIV are to be carried out, then the effect of population should be taken into account.
+
+
+#### **Recommendation**:
+
+TB/HIV co-infection is one of the serious health problems as mortality rates are quite high. Thus, collaborative TB/HIV activities that reduce the co-morbidities and mortalities should be addressed. There is also an urgent need for increased public funding toward TB health care services that have long-term effectiveness in high HIV-prevalence settings.
+
+### References:
+[1] https://aidsinfo.nih.gov/understanding-hiv-aids/fact-sheets/26/90/hiv-and-tuberculosis--tb-
+[2] https://www.cdc.gov/tb/topic/basics/tbhivcoinfection.htm
+[3] https://www.unaids.org/en/topic/tuberculosis
